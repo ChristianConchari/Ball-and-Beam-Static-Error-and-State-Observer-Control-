@@ -1,4 +1,6 @@
-%% 
+%% Init workspace
+% Run the following cell to clear all the variables and close all the tabs.
+
 clear all
 close all
 %% Plant of the SS
@@ -19,6 +21,7 @@ n_gearbox = 0.85;   %Gearbox efficiency
 
 n_total = n_motor + n_gearbox;  %Total efficiency
 J_b = (1/2)*m_b*L^2;            %Beam moment of inertia 
+% Space State - Plant definition
 
 a_32 = ((m_B*J_b*g) + m_B^2*g*delta_2^2)/(J_b+m_B*delta_2^2)^2;
 a_33 = ((K_g^2*K_i*K_m*n_total)/(R_m*(J_b+m_B*delta_2^2)))*(L^2/d^2);
@@ -44,6 +47,11 @@ C = [0 1 0 0];
 % Define the D matrix for SS
 D = 0;
 
+% Show the plant space state
+PWC = ss(A,B,C,D);
+PWC
+% Noise and Disturbances definition
+
 %Output perturbance
 OP = 0.1;
 %Input perturbance
@@ -52,7 +60,12 @@ IP = 0.8;
 S = 1.1;
 % Define the system order
 n = size(A,1);
+% Plant Without Control
+figure(1)
+step(PWC,20), title('Natural plant behavior')
+disp('As can be seen, it is initially an unstable system.')
 %% Controllability
+
 controllable = rank(ctrb(A,B));
 if controllable == n
     resp_controllability = 'Controllable';
@@ -61,6 +74,7 @@ else
 end
 disp(['The system is: ',resp_controllability]);
 %% Obserbability
+
 observable = rank(obsv(A,C));
 if observable == n
     resp_observability = 'Observable';
@@ -68,87 +82,163 @@ else
     resp_observability = 'Unobservable';
 end
 disp(['The system is: ',resp_observability]);
-%% Plant Without Control
-PWC = ss(A,B,C,D);
-figure(1), step(PWC,10);
-%% Pole Placement Control
-% Design control for OS=5% and Ts=1
+%% Control Design And Static Error
+% Design control for OS=4% and Ts=0.7
+% Eigenvalue Placement
+% To modify the plant dynamics according to the desired parameters, the eigenvalue 
+% positioning technique will be used.
+
+% Desired plant dynamics parameters
 OS=4;
 Ts=0.7;
+
 % Define the dominant poles
 E = abs(log(OS/100))/sqrt(pi^2+(log(OS/100))^2);
 Wn = 4/(E*Ts);
 
-polescl1 = -E*Wn+Wn*sqrt(E^2-1);
-polescl2 = -E*Wn-Wn*sqrt(E^2-1);
-polescl3 = real(polescl1)*10;
-polescl4 = polescl3+1;
+polescl1_PUC1 = -E*Wn+Wn*sqrt(E^2-1);
+polescl2_PUC1 = -E*Wn-Wn*sqrt(E^2-1);
+polescl3_PUC1 = real(polescl1_PUC1)*10;
+polescl4_PUC1 = polescl3_PUC1-1;
+Polescl_PUC1 = [polescl1_PUC1 polescl2_PUC1 polescl3_PUC1 polescl4_PUC1];
 
-Polescl = [polescl1 polescl2 polescl3 polescl4];
-K1 = place(A,B,Polescl);
+% Place the poles to shape the system dynamic
+K1 = place(A,B,Polescl_PUC1);
+% Static Error Control
+% When we use a feedback state control to modify the system behavior, we don't 
+% guarantee null static error, which can be briefly defined as the difference 
+% between the measured value and the true value of the quantity. 
+% 
+% We can implement a pre-compensation gain to reduce this error. One of the 
+% major advantages of implementing this method is that we don't need to increase 
+% the system order to control the error, but on the other hand, it may not work 
+% in all cases and may even increase the static error.
 
 % Determine the precompensation gain
 Kpre1 = inv(-(C-D*K1)*inv(A-B*K1)*B + D);
+%% 
+% When we do not know exactly the parameterization of the system states. In 
+% order to eliminate the static error, it's necessary to increase the orden of 
+% the system. This is possible by adding to the plant an additional integral part.
+
+% Define the extended Space State
+Aext = [A zeros(n,1) ; -C 0];
+Bext = [B ; -D];
+Cext = [C 0];
+Dext = 0;
+
+% Poles placement for extended SS
+polescl5_PUC1 = polescl4_PUC1-1;
+Polescl_PUC1_ext = [polescl1_PUC1 polescl2_PUC1 polescl3_PUC1 polescl4_PUC1 polescl5_PUC1];
+Kext1 = place(Aext,Bext,Polescl_PUC1_ext);
+K1ext = Kext1(1:n);
+Kpre1ext = Kext1(n+1);
+% Plant Under Control - Eigenvalue placement - Static Error
+
+Acl1 = A-B*K1;
+PUC1 = ss(Acl1,B,C,D);
+PUC1
+figure(2)
+step(Kpre1*PUC1,20), title('Plant Under Control - Eigenvalue Placement + Static Error')
+stepinfo(Kpre1*PUC1)
+disp('As can be seen, we have managed to get pretty close to the desired dynamics of the system and to remove the Static Error on the system response.')
+%% 
+% 
 %% ITAE Control
-% Design control for Wn = 1 rad/s
-% s^4 + 2.1*Wn*s^3 + 3.4*Wn^2*s^2 + 2.7*Wn^3*s + Wn^4
-% Define the dominant poles
-Polescl = (roots([1 2.1*Wn 3.4*Wn^2 2.7*Wn^3 Wn^4]))';
-K2 = place(A,B,Polescl);
+% The ITAE (Integral of Time multiplying the Absolute value of Error) method 
+% tries to shape the system dynamic by penalizing the error, in our case, the 
+% deviation between the unit step response and the steady-state value.
+% 
+% Now we must specify the desired natural frecuency to shape the system dynamics.
+
+Polescl_PUC2 = (roots([1 2.1*Wn 3.4*Wn^2 2.7*Wn^3 Wn^4]))';
+K2 = place(A,B,Polescl_PUC2);
+% Static Error Control
+% The extended plant will remain the same as the one calculated for the implementation 
+% with the previous technique, what will change will be the poles placement.
 
 % Determine the precompensation gain
 Kpre2 = inv(-(C-D*K2)*inv(A-B*K2)*B + D);
-%% LQR Control
+% Poles placement
+polescl5_PUC2 = real(Polescl_PUC2(4))-1;
+Polescl_PUC2_ext = [Polescl_PUC2(1), Polescl_PUC2(2), Polescl_PUC2(3), Polescl_PUC2(4), polescl5_PUC2];
+Kext2 = place(Aext,Bext,Polescl_PUC2_ext);
+K2ext = Kext2(1:n);
+Kpre2ext = Kext2(n+1);
+% Plant Under Control - ITAE + Static Error
 
-Q =  [10   0     0     0;
-      0     1     0    0;
-      0     0     1    0;
-      0     0     0    1.23];
-R = 1.50;
+Acl2 = A-B*K2;
+PUC2 = ss(Acl2,B,C,D);
+PUC2
+figure(3)
+step(Kpre2*PUC2,20), title('Plant Under Control - ITAE + Static Error')
+stepinfo(Kpre2*PUC2)
+disp('As can be seen, we have managed to shape the dynamics of the system for almost no overshoot and a fairly short settling time, at the same time removing the static error.')
+%% LQR Control
+% The theory of optimal control is concerned with operating a dynamic system 
+% at minimum cost. The case where the system dynamics are described by a set of 
+% linear differential equations and the cost is described by a quadratic function 
+% is called the LQ problem.
+
+% where *Q* is the real symmetric or positive definite hermitic matrix and *R* 
+% is a real symmetric or positive definite hermitic matrix. The matrices Q and 
+% R determine the relative importance of the error and the cost of this energy.
+%
+% * The weight matrix *Q* is related to performance.
+% * the weight matrix *R* is related to the effort.
+%
+% The weight matrix Q will directly affect the system dynamics, i.e. the system 
+% states. On the other hand, the weight matrix R will directly affect the system 
+% actuators.
+% 
+
+Q =  [10     0     0    0; % Penalize the beam inclination angle
+      0     1     0    0; % Penalize the ball position
+      0     0     10    0; % Penalize the beam inclination angular rate
+      0     0     0    1]; % Penalize the ball velocity
+
+R = 1.2; % Penalize actuator effort
 
 [K3, S, e] = lqr(A,B,Q,R);
+% Static Error
+% For the LQR case it will be enough to find the pre-compensation gain to deal 
+% with the static error.
 
 % Determine the precompensation gain
 Kpre3 = inv(-(C-D*K3)*inv(A-B*K3)*B + D);
+% Plant Under Control - LQR
 
-% PUC3
 Acl3 = (A-B*K3);
 PUC3 = ss(Acl3,B,C,D);
-figure(3) 
-[y1,t] = step(PUC3*Kpre3,10); grid on
-stepResults = stepinfo(y1,t);
-stepResults.SettlingTime
-stepResults.Overshoot
+figure(4)
+step(PUC3*Kpre3,20), title('Plant Under Control - LQR + Static Error')
+stepinfo(Kpre3*PUC2)
+disp('As can be seen, we have managed to control the plant with quite good dynamics, and we have also mitigated the static error.')
+%% Space State Observers Design
+% To design the observer's plant, the best performing closed-loop controlled 
+% plant will be taken into account, which taking into account the response to 
+% a step input, was the plant modified using eigenvalue placement.
 
-%% State Observers
-% define the observer poles 10 times the placed poles
-PolesObs = Polescl(1:n)*10;
-% find the L-values
+% Define the observer poles 10 times the placed poles
+PolesObs = Polescl_PUC1(1:n)*10;
+% Find the L-values
 L = place(A',C', PolesObs)';
 % Define the Observer Space State
 Aobs = A - L*C;
 Bobs = [B-L*D L];
 Cobs = eye(n);
 Dobs = zeros(n,2);
+% Observer + States Controller Design
+
 % Observer + Controller Space State
 Aoc = A-L*C-B*K1+L*D*K1;
-Boc = [B-L*D L];
+Boc = [B-L*D, L];
 Coc = -K1;
-Doc = [1 0];
-%% Static Error
-% Feedback state control + Static Error
-Aext = [A zeros(n,1) ; -C 0];
-Bext = [B ; -D];
-Cext = [C 0];
-Dext = 0;
-% Poles placement
-polescl5 = polescl4+1;
-Polescl = [polescl1 polescl2 polescl3 polescl4 polescl5];
-Kext = place(Aext,Bext,Polescl);
-K4 = Kext(1:n);
-Kpre4 = Kext(n+1);
-% Observer + Controller Space State + Static Control
-Aocc = [A-L*C-B*K4+L*D*K4 -B*Kpre4+L*D*Kpre4; zeros(1,n) 0];
-Bocc = [zeros(n,1) L; 1 -1];
-Cocc = [-K4 -Kpre4];
+Doc = [1, 0];
+% Observer + States Controller Design + Static Error
+
+% Observer + Controller Space State + Static Error
+Aocc = [A-L*C-B*K1ext+L*D*K1ext -B*Kpre1ext+L*D*Kpre1ext; zeros(1,n) 0];
+Bocc = [zeros(n,1), L; 1, -1];
+Cocc = [-K1ext -Kpre1ext];
 Docc = zeros(1,2);
