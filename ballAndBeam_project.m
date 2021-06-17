@@ -4,7 +4,9 @@
 clear all
 close all
 %% Plant of the SS
-% Define the physical values
+% In this section we want to implement all the variables of the space state.
+% Physical values definition
+
 g = 9.8;            %Gravity acceleration
 m_B = 0.064;        %Ball mass
 m_b = 0.65;         %Beam mass
