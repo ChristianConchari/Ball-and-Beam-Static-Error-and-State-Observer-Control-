@@ -2,7 +2,6 @@
 clear all
 close all
 %% Plant of the SS
-
 % Define the physical values
 g = 9.8;            %Gravity acceleration
 m_B = 0.064;        %Ball mass
@@ -21,17 +20,23 @@ n_gearbox = 0.85;   %Gearbox efficiency
 n_total = n_motor + n_gearbox;  %Total efficiency
 J_b = (1/2)*m_b*L^2;            %Beam moment of inertia 
 
+a_32 = ((m_B*J_b*g) + m_B^2*g*delta_2^2)/(J_b+m_B*delta_2^2)^2;
+a_33 = ((K_g^2*K_i*K_m*n_total)/(R_m*(J_b+m_B*delta_2^2)))*(L^2/d^2);
+a_41 = (5*g/7);
+
 % Define the A matrix for SS
-A = [0 0 1 0 ;
-    0 0 0 1 ;
-    0 -(((m_B*J_b*g) + (m_B^2*g*delta_2^2))/(J_b+m_B*delta_2^2)^2) -((K_g^2*K_i*K_m*n_total)/(R_m*(J_b+m_B*delta_2^2))*(L^2/d^2)) 0;
-    -(5*g/7) 0 0 0];
+A = [0,     0,      1,    0 ;
+     0,     0,      0,    1 ;
+     0,     -a_32, -a_33, 0;
+     -a_41, 0,      0,    0];
+ 
+b_31 = ((K_g*K_i*n_total)/(R_m*(J_b+m_B*delta_2^2)))*(L/d);
 
 % Define the B matrix for SS
-B = [0 ;
-    0;
-    ((K_g*K_i*n_total)/(R_m*(J_b+m_B*delta_2^2)))*(L/d);
-    0];
+B = [0;
+     0;
+     b_31;
+     0];
 
 % Define the C matrix for SS
 C = [0 1 0 0];
@@ -45,9 +50,24 @@ OP = 0.1;
 IP = 0.8;
 %parameter uncertainty
 S = 1.1;
-
 % Define the system order
 n = size(A,1);
+%% Controllability
+controllable = rank(ctrb(A,B));
+if controllable == n
+    resp_controllability = 'Controllable';
+else
+    resp_controllability = 'Uncontrollable';
+end
+disp(['The system is: ',resp_controllability]);
+%% Obserbability
+observable = rank(obsv(A,C));
+if observable == n
+    resp_observability = 'Observable';
+else
+    resp_observability = 'Unobservable';
+end
+disp(['The system is: ',resp_observability]);
 %% Plant Without Control
 PWC = ss(A,B,C,D);
 figure(1), step(PWC,10);
