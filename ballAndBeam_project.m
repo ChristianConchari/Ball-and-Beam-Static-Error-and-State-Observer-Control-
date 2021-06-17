@@ -216,31 +216,48 @@ figure(4)
 step(PUC3*Kpre3,20), title('Plant Under Control - LQR + Static Error')
 stepinfo(Kpre3*PUC2)
 disp('As can be seen, we have managed to control the plant with quite good dynamics, and we have also mitigated the static error.')
-%% Space State Observers Design
-% To design the observer's plant, the best performing closed-loop controlled 
-% plant will be taken into account, which taking into account the response to 
-% a step input, was the plant modified using eigenvalue placement.
-
+%% Space State Observers Design - Eigenvalue Placement
 % Define the observer poles 10 times the placed poles
-PolesObs = Polescl_PUC1(1:n)*10;
+PolesObs1 = Polescl_PUC1(1:n)*10;
 % Find the L-values
-L = place(A',C', PolesObs)';
+L1 = place(A',C', PolesObs1)';
 % Define the Observer Space State
-Aobs = A - L*C;
-Bobs = [B-L*D L];
-Cobs = eye(n);
-Dobs = zeros(n,2);
-% Observer + States Controller Design
+Aobs1 = A - L1*C;
+Bobs1 = [B-L1*D L1];
+Cobs1 = eye(n);
+Dobs1 = zeros(n,2);
 
 % Observer + Controller Space State
-Aoc = A-L*C-B*K1+L*D*K1;
-Boc = [B-L*D, L];
-Coc = -K1;
-Doc = [1, 0];
-% Observer + States Controller Design + Static Error
+Aoc1 = A-L1*C-B*K1+L1*D*K1;
+Boc1 = [B-L1*D, L1];
+Coc1 = -K1;
+Doc1 = [1, 0];
 
-% Observer + Controller Space State + Static Error
-Aocc = [A-L*C-B*K1ext+L*D*K1ext -B*Kpre1ext+L*D*Kpre1ext; zeros(1,n) 0];
-Bocc = [zeros(n,1), L; 1, -1];
-Cocc = [-K1ext -Kpre1ext];
-Docc = zeros(1,2);
+% Observer + States Controller Design + Static Error
+Aocc1 = [A-L1*C-B*K1ext+L1*D*K1ext -B*Kpre1ext+L1*D*Kpre1ext; zeros(1,n) 0];
+Bocc1 = [zeros(n,1), L1; 1, -1];
+Cocc1 = [-K1ext -Kpre1ext];
+Docc1 = zeros(1,2);
+
+%% Space State Observers Design - ITAE
+% Define the observer poles 10 times the placed poles
+PolesObs2 = Polescl_PUC2(1:n)*10;
+% Find the L-values
+L2 = place(A',C', PolesObs2)';
+% Define the Observer Space State
+Aobs2 = A - L2*C;
+Bobs2 = [B-L2*D L2];
+Cobs2 = eye(n);
+Dobs2 = zeros(n,2);
+
+% Observer + Controller Space State
+Aoc2 = A-L2*C-B*K2+L2*D*K2;
+Boc2 = [B-L2*D, L2];
+Coc2 = -K2;
+Doc2 = [1, 0];
+
+% Observer + States Controller Design + Static Error
+Aocc2 = [A-L2*C-B*K2ext+L2*D*K2ext -B*Kpre2ext+L2*D*Kpre2ext; zeros(1,n) 0];
+Bocc2 = [zeros(n,1), L2; 1, -1];
+Cocc2 = [-K2ext -Kpre2ext];
+Docc2 = zeros(1,2);
