@@ -141,7 +141,7 @@ Acl1 = A-B*K1;
 PUC1 = ss(Acl1,B,C,D);
 PUC1
 figure(2)
-step(Kpre1*PUC1,20), title('Plant Under Control - Eigenvalue Placement + Static Error')
+step(Kpre1*PUC1,20), title('Plant Under Control - Eigenvalue Placement + Pre-compensation Gain')
 stepinfo(Kpre1*PUC1)
 disp('As can be seen, we have managed to get pretty close to the desired dynamics of the system and to remove the Static Error on the system response.')
 %% 
@@ -168,12 +168,11 @@ Kext2 = place(Aext,Bext,Polescl_PUC2_ext);
 K2ext = Kext2(1:n);
 Kpre2ext = Kext2(n+1);
 % Plant Under Control - ITAE + Static Error
-
 Acl2 = A-B*K2;
 PUC2 = ss(Acl2,B,C,D);
-PUC2
+PUC2 
 figure(3)
-step(Kpre2*PUC2,20), title('Plant Under Control - ITAE + Static Error')
+step(Kpre2*PUC2,20), title('Plant Under Control - ITAE + Pre-compensation Gain')
 stepinfo(Kpre2*PUC2)
 disp('As can be seen, we have managed to shape the dynamics of the system for almost no overshoot and a fairly short settling time, at the same time removing the static error.')
 %% LQR Control
@@ -194,14 +193,14 @@ disp('As can be seen, we have managed to shape the dynamics of the system for al
 % actuators.
 % 
 
-Q =  [10     0     0    0; % Penalize the beam inclination angle
+Q =  [15     0     0    0; % Penalize the beam inclination angle
       0     1     0    0; % Penalize the ball position
-      0     0     10    0; % Penalize the beam inclination angular rate
-      0     0     0    1]; % Penalize the ball velocity
+      0     0     0.1    0; % Penalize the beam inclination angular rate
+      0     0     0    1.2]; % Penalize the ball velocity
 
-R = 1.2; % Penalize actuator effort
+R = 1.44; % Penalize actuator effort
 
-[K3, S, e] = lqr(A,B,Q,R);
+[K3, ~, ~] = lqr(A,B,Q,R);
 % Static Error
 % For the LQR case it will be enough to find the pre-compensation gain to deal 
 % with the static error.
@@ -213,8 +212,8 @@ Kpre3 = inv(-(C-D*K3)*inv(A-B*K3)*B + D);
 Acl3 = (A-B*K3);
 PUC3 = ss(Acl3,B,C,D);
 figure(4)
-step(PUC3*Kpre3,20), title('Plant Under Control - LQR + Static Error')
-stepinfo(Kpre3*PUC2)
+step(PUC3*Kpre3,20), title('Plant Under Control - LQR + Pre-compensation Gain')
+stepinfo(Kpre3*PUC3)
 disp('As can be seen, we have managed to control the plant with quite good dynamics, and we have also mitigated the static error.')
 %% Space State Observers Design - Eigenvalue Placement
 % Define the observer poles 10 times the placed poles
